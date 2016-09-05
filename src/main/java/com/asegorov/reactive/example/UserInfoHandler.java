@@ -29,7 +29,7 @@ public class UserInfoHandler extends TextWebSocketHandler {
         UserInfo userInfo = objectMapper.readValue(message.getPayload(), UserInfo.class);
         userInfo.setSession(session);
         messageBroker.newUser(userInfo);
-        System.out.println("Connection closed " + message.toString());
+        System.out.println("Connection id " + session.getId() + " Connection payload " + message.toString());
     }
 
     @Override

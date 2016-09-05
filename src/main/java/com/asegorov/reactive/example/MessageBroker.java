@@ -8,8 +8,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.TopicProcessor;
 
 import java.io.IOException;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by Afh on 29.08.2016.
@@ -25,23 +25,25 @@ public class MessageBroker {
 
     //Flux<List<UserInfo>> users;
 
-    Set<UserInfo> users = new CopyOnWriteArraySet<>();
+    ConcurrentHashMap<UserInfo, UserInfo> users = new ConcurrentHashMap<>();
 
     public MessageBroker(){
         newUsers = TopicProcessor.create();
         deleteUsers = TopicProcessor.create();
 
-        newUsers.subscribe(userInfo -> {
-            users.add(userInfo);
-        });
+        Flux<UserInfo> newUsersFiltered = newUsers.filter(userInfo -> !users.contains(userInfo));
 
-        deleteUsers.subscribe(userInfo -> {
+        newUsersFiltered.subscribe(userInfo -> users.put(userInfo, userInfo));
+
+        Flux<UserInfo> deleteUsersWithNames = deleteUsers.filter(users::contains).map(userInfo -> users.get(userInfo));
+        deleteUsersWithNames.subscribe(userInfo -> {
             users.remove(userInfo);
         });
 
         // send user events to all users
-        Flux.merge(newUsers, deleteUsers).subscribe(userInfo -> {
-            Flux.fromIterable(users).parallel()
+        Flux.merge(newUsersFiltered, deleteUsersWithNames).subscribe(userInfo -> {
+            HashMap<UserInfo, UserInfo> usr = new HashMap(users);
+            Flux.fromIterable(usr.values()).parallel()
                     .filter(userInfo1 -> !userInfo.equals(userInfo1))
                     .subscribe(userInfo1 -> {
                         try {
@@ -54,7 +56,7 @@ public class MessageBroker {
 
         // send users to new user
         newUsers.subscribe(userInfo -> {
-            Flux.fromIterable(users)
+            Flux.fromIterable(users.values())
                     .filter(userInfo1 -> !userInfo.equals(userInfo1))
                     .subscribe(userInfo1 -> {
                         try {
